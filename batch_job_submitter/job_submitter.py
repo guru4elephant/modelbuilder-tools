@@ -258,8 +258,7 @@ class JobSubmitter:
                     response = self.api_tool.post(
                         uri="/v2/batchinference",
                         query="Action=DescribeBatchInferenceTasks",
-                        body=payload,
-                        timeout=30
+                        body=payload
                     )
                     
                     response.raise_for_status()
