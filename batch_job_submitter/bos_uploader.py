@@ -117,7 +117,7 @@ class BosUploader:
             remote_dir: Remote directory
             
         Returns:
-            Tuple of (success, remote_url)
+            Tuple of (success, remote_url) where remote_url is BOS URI format pointing to directory
         """
         # Get file name
         file_name = Path(local_file).name
@@ -133,5 +133,32 @@ class BosUploader:
             access_key_id=self.access_key_id,
             secret_access_key=self.secret_access_key
         )
+        
+        if success:
+            # Convert HTTPS URL to BOS URI format if needed
+            if remote_url.startswith("https://"):
+                # Extract the path part from HTTPS URL
+                # Example: https://copilot-engine-batch-infer.bj.bcebos.com/llm-algo/5306ceb2/deepmath-part8-trial1.jsonl
+                # Should become: bos:/copilot-engine-batch-infer/llm-algo/5306ceb2/
+                parts = remote_url.split('/')
+                if len(parts) >= 4:
+                    bucket_name = parts[2].split('.')[0]  # Extract bucket from domain
+                    path_parts = parts[3:]  # Get path parts after domain
+                    # Remove filename to get directory path
+                    if len(path_parts) > 0:
+                        dir_path = '/'.join(path_parts[:-1])  # Remove last part (filename)
+                        remote_url = f"bos:/{bucket_name}/{dir_path}"
+            
+            # Ensure we return directory path, not file path
+            elif remote_url.startswith("bos:/"):
+                # If it's already BOS format, ensure it points to directory
+                if '/' in remote_url:
+                    parts = remote_url.split('/')
+                    if len(parts) > 3:  # Has filename at the end
+                        # Remove filename to get directory
+                        dir_path = '/'.join(parts[:-1])
+                        remote_url = dir_path
+            
+            print(f"Debug: Converted to BOS directory URI: {remote_url}")
         
         return success, remote_url 

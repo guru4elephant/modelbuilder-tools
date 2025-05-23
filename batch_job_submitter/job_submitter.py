@@ -116,6 +116,13 @@ class JobSubmitter:
         # Create output URI - use the same path as input for output
         # Following the pattern from the user's example
         output_uri = bos_uri  # Use same path for output
+        
+        # If the bos_uri is a directory path, ensure it's properly formatted for input/output
+        # The API expects the same directory for both input and output
+        if bos_uri.endswith('/'):
+            # Remove trailing slash if present
+            bos_uri = bos_uri.rstrip('/')
+            output_uri = bos_uri
             
         # Debug output
         print(f"Debug: Input BOS URI: {bos_uri}")
