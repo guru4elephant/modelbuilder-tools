@@ -1,0 +1,3 @@
+[console_scripts]
+batch-submit = batch_job_submitter.cli:main
+modelbuilder-batch = batch_job_submitter.cli:main
