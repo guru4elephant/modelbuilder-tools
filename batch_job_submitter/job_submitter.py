@@ -144,9 +144,9 @@ class JobSubmitter:
             if model_id in ["amv-6cg81awp4wu3"]:  # Add beam search model IDs here
                 inference_params["n"] = 10
             
+            # Create task without description parameter - following user's working example
             task = Data.create_offline_batch_inference_task(
                 name=job_name,
-                description=description,  # Fixed spelling
                 model_id=model_id,
                 inference_params=inference_params,
                 input_bos_uri=bos_uri,
@@ -178,7 +178,6 @@ class JobSubmitter:
                     try:
                         task = Data.create_offline_batch_inference_task(
                             name=job_name,
-                            description=description,  # Fixed spelling
                             model_id=model_id,
                             inference_params=inference_params,
                             input_bos_uri=alt_input,
