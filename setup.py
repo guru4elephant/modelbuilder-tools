@@ -14,8 +14,8 @@ with open(os.path.join(current_dir, "requirements.txt"), "r", encoding="utf-8") 
     requirements = [line.strip() for line in fh.read().splitlines() if line.strip() and not line.startswith('#')]
 
 setup(
-    name="modelbuilder-batch-submitter",
-    version="0.1.0",
+    name="modelbuilder_batch_submitter",
+    version="0.1.2",
     author="guru4elephant",
     author_email="guru4elephant@gmail.com",
     description="A command-line tool for submitting JSONL files to modelbuilder batch inference service",

@@ -204,7 +204,7 @@ class JobSubmitter:
             
     def check_task_status(self, task_id: str) -> Dict[str, Any]:
         """
-        Check task status
+        Check task status using direct BCE API calls
         
         Args:
             task_id: Task ID
@@ -212,12 +212,50 @@ class JobSubmitter:
         Returns:
             Task status information
         """
-        if not HAS_QIANFAN:
-            raise ImportError("qianfan package not found. Please install it with 'pip install qianfan'")
-            
         try:
-            task = Data.describe_batch_inference_task(task_id=task_id)
-            return task.get('result', {})
+            # Use the same pattern as list_tasks but for a single task
+            payload = {
+                "taskId": task_id
+            }
+            
+            # Make API call using BCE authentication
+            response = self.api_tool.post(
+                uri="/v2/batchinference",
+                query="Action=DescribeBatchInferenceTask",  # Singular, not plural
+                body=payload
+            )
+            
+            response.raise_for_status()
+            response_data = response.json()
+            
+            # Extract task result
+            result = response_data.get("result", {})
+            
+            # Return the task information in the same format as list_tasks
+            task_info = {
+                'taskId': result.get('taskId'),
+                'name': result.get('name'),
+                'status': result.get('runStatus'),
+                'progress': result.get('progress', 0),
+                'createTime': result.get('createTime'),
+                'startTime': result.get('startTime'),
+                'endTime': result.get('endTime'),
+                'inputBosUri': result.get('inputBosUri'),
+                'outputBosUri': result.get('outputBosUri'),
+                'outputDir': result.get('outputDir'),
+                'modelId': result.get('modelId'),
+                'errorCode': result.get('errorCode'),
+                'errorMessage': result.get('errorMessage')
+            }
+            
+            return task_info
+            
+        except requests.exceptions.RequestException as e:
+            print(f"API request failed: {str(e)}", file=sys.stderr)
+            return {}
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse API response: {str(e)}", file=sys.stderr)
+            return {}
         except Exception as e:
             print(f"Failed to check task status: {str(e)}", file=sys.stderr)
             return {}

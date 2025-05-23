@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
-Name: modelbuilder-batch-submitter
-Version: 0.1.0
+Name: modelbuilder_batch_submitter
+Version: 0.1.2
 Summary: A command-line tool for submitting JSONL files to modelbuilder batch inference service
 Home-page: https://github.com/guru4elephant/modelbuilder-tools
 Author: guru4elephant
