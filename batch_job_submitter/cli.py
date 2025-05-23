@@ -252,11 +252,19 @@ def handle_list(args, config: Config):
     print("-" * 120)
     
     for task in tasks:
-        task_id = task.get('taskId', 'Unknown')[:18] + '...' if len(task.get('taskId', '')) > 20 else task.get('taskId', 'Unknown')
-        name = task.get('name', 'Unknown')[:28] + '...' if len(task.get('name', '')) > 30 else task.get('name', 'Unknown')
-        status = task.get('status', 'Unknown')
-        model_id = task.get('modelId', 'Unknown')[:18] + '...' if len(task.get('modelId', '')) > 20 else task.get('modelId', 'Unknown')
-        create_time = task.get('createTime', 'Unknown')[:18] if task.get('createTime') else 'Unknown'
+        task_id = task.get('taskId', 'Unknown')
+        task_id = (task_id[:18] + '...' if task_id and len(task_id) > 20 else task_id) if task_id else 'Unknown'
+        
+        name = task.get('name', 'Unknown')
+        name = (name[:28] + '...' if name and len(name) > 30 else name) if name else 'Unknown'
+        
+        status = task.get('status', 'Unknown') or 'Unknown'
+        
+        model_id = task.get('modelId', 'Unknown')
+        model_id = (model_id[:18] + '...' if model_id and len(model_id) > 20 else model_id) if model_id else 'Unknown'
+        
+        create_time = task.get('createTime', 'Unknown')
+        create_time = (create_time[:18] if create_time else 'Unknown') if create_time else 'Unknown'
         
         print(f"{task_id:<20} {name:<30} {status:<12} {model_id:<20} {create_time:<20}")
     
