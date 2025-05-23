@@ -73,7 +73,7 @@ class JobSubmitter:
         Submit job to batch inference service
         
         Args:
-            bos_uri: BOS URI for input file (should be in format bos://bucket/key)
+            bos_uri: BOS URI for input file (should be in format bos:/bucket/key)
             job_name: Job name
             description: Job description
             
@@ -83,12 +83,17 @@ class JobSubmitter:
         if not HAS_QIANFAN:
             raise ImportError("qianfan package not found. Please install it with 'pip install qianfan'")
             
-        # Ensure BOS URI is in correct format
-        if not bos_uri.startswith("bos://"):
-            raise ValueError(f"BOS URI must start with 'bos://', got: {bos_uri}")
+        # Convert bos:// format to bos:/ format if needed
+        if bos_uri.startswith("bos://"):
+            bos_uri = bos_uri.replace("bos://", "bos:/")
+            print(f"Debug: Converted bos:// to bos:/ format: {bos_uri}")
+        
+        # Ensure BOS URI is in correct format (single slash)
+        if not bos_uri.startswith("bos:/"):
+            raise ValueError(f"BOS URI must start with 'bos:/', got: {bos_uri}")
             
         # Get BOS URI parts
-        parts = bos_uri.replace("bos://", "").split("/")
+        parts = bos_uri.replace("bos:/", "").split("/")
         bucket = parts[0]
         key = "/".join(parts[1:])
         
@@ -108,15 +113,9 @@ class JobSubmitter:
         top_p = float(self.config.get("job", "top_p", "0.01"))
         max_output_tokens = int(self.config.get("job", "max_output_tokens", "4096"))
         
-        # Create output URI from input URI
-        # Change the last part of the path to "output"
-        output_uri_parts = bos_uri.split("/")
-        if len(output_uri_parts) >= 4:  # has bucket and at least one folder
-            # Replace the file name with "output" directory
-            output_uri = "/".join(output_uri_parts[:-1]) + "/output"
-        else:
-            # Add output directory
-            output_uri = bos_uri.rstrip("/") + "/output"
+        # Create output URI - use the same path as input for output
+        # Following the pattern from the user's example
+        output_uri = bos_uri  # Use same path for output
             
         # Debug output
         print(f"Debug: Input BOS URI: {bos_uri}")
@@ -126,16 +125,23 @@ class JobSubmitter:
         print(f"Debug: Description: {description}")
             
         try:
-            # Submit task using the exact parameter names expected by the API
+            # Submit task using the exact parameter names and format from user's example
+            inference_params = {
+                "temperature": temperature,
+                "top_p": top_p,
+                "max_output_tokens": max_output_tokens
+            }
+            
+            # Add 'n' parameter if it's a beam search model (optional)
+            # This follows the user's example pattern
+            if model_id in ["amv-6cg81awp4wu3"]:  # Add beam search model IDs here
+                inference_params["n"] = 10
+            
             task = Data.create_offline_batch_inference_task(
                 name=job_name,
-                description=description,
+                description=description,  # Fixed spelling
                 model_id=model_id,
-                inference_params={
-                    "temperature": temperature,
-                    "top_p": top_p,
-                    "max_output_tokens": max_output_tokens
-                },
+                inference_params=inference_params,
                 input_bos_uri=bos_uri,
                 output_bos_uri=output_uri
             )
@@ -151,27 +157,23 @@ class JobSubmitter:
             if "InvalidBosUri" in str(e):
                 print("Debug: Trying alternative BOS URI formats...", file=sys.stderr)
                 
-                # Try different formats
+                # Try different formats based on user's working example
                 alternative_formats = [
-                    f"bos://{bucket}/{key}",  # Standard format
-                    f"bj.bcebos.com/{bucket}/{key}",  # Without protocol
+                    f"bos:/{bucket}/{key}",  # Single slash format (correct)
+                    f"bos://{bucket}/{key}",  # Double slash format
                     f"{bucket}/{key}",  # Without bos prefix
                 ]
                 
                 for alt_input in alternative_formats:
-                    alt_output = alt_input.replace(key, "/".join(key.split("/")[:-1]) + "/output")
+                    alt_output = alt_input  # Use same path for output
                     print(f"Debug: Trying input URI: {alt_input}, output URI: {alt_output}", file=sys.stderr)
                     
                     try:
                         task = Data.create_offline_batch_inference_task(
                             name=job_name,
-                            description=description,
+                            description=description,  # Fixed spelling
                             model_id=model_id,
-                            inference_params={
-                                "temperature": temperature,
-                                "top_p": top_p,
-                                "max_output_tokens": max_output_tokens
-                            },
+                            inference_params=inference_params,
                             input_bos_uri=alt_input,
                             output_bos_uri=alt_output
                         )

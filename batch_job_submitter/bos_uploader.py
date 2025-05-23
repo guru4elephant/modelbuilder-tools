@@ -67,8 +67,8 @@ if not HAS_JSONFLOW:
             # Upload file
             client.upload_file(local_file, bucket, remote_key)
             
-            # Construct URL
-            remote_url = f"bos://{bucket}/{remote_key}"
+            # Construct URL using correct single slash format
+            remote_url = f"bos:/{bucket}/{remote_key}"
             
             return True, remote_url
         except Exception as e:
