@@ -73,7 +73,7 @@ class JobSubmitter:
         Submit job to batch inference service
         
         Args:
-            bos_uri: BOS URI for input file
+            bos_uri: BOS URI for input file (should be in format bos://bucket/key)
             job_name: Job name
             description: Job description
             
@@ -82,6 +82,10 @@ class JobSubmitter:
         """
         if not HAS_QIANFAN:
             raise ImportError("qianfan package not found. Please install it with 'pip install qianfan'")
+            
+        # Ensure BOS URI is in correct format
+        if not bos_uri.startswith("bos://"):
+            raise ValueError(f"BOS URI must start with 'bos://', got: {bos_uri}")
             
         # Get BOS URI parts
         parts = bos_uri.replace("bos://", "").split("/")
@@ -104,18 +108,28 @@ class JobSubmitter:
         top_p = float(self.config.get("job", "top_p", "0.01"))
         max_output_tokens = int(self.config.get("job", "max_output_tokens", "4096"))
         
-        # Extract output URI (same as input but with different folder)
+        # Create output URI from input URI
+        # Change the last part of the path to "output"
         output_uri_parts = bos_uri.split("/")
         if len(output_uri_parts) >= 4:  # has bucket and at least one folder
+            # Replace the file name with "output" directory
             output_uri = "/".join(output_uri_parts[:-1]) + "/output"
         else:
-            output_uri = bos_uri + "/output"
+            # Add output directory
+            output_uri = bos_uri.rstrip("/") + "/output"
+            
+        # Debug output
+        print(f"Debug: Input BOS URI: {bos_uri}")
+        print(f"Debug: Output BOS URI: {output_uri}")
+        print(f"Debug: Model ID: {model_id}")
+        print(f"Debug: Job Name: {job_name}")
+        print(f"Debug: Description: {description}")
             
         try:
-            # Submit task
+            # Submit task using the exact parameter names expected by the API
             task = Data.create_offline_batch_inference_task(
                 name=job_name,
-                descrption=description,
+                description=description,
                 model_id=model_id,
                 inference_params={
                     "temperature": temperature,
@@ -132,6 +146,43 @@ class JobSubmitter:
             return True, task_id
         except Exception as e:
             print(f"Job submission failed: {str(e)}", file=sys.stderr)
+            
+            # If it's an InvalidBosUri error, try alternative formats
+            if "InvalidBosUri" in str(e):
+                print("Debug: Trying alternative BOS URI formats...", file=sys.stderr)
+                
+                # Try different formats
+                alternative_formats = [
+                    f"bos://{bucket}/{key}",  # Standard format
+                    f"bj.bcebos.com/{bucket}/{key}",  # Without protocol
+                    f"{bucket}/{key}",  # Without bos prefix
+                ]
+                
+                for alt_input in alternative_formats:
+                    alt_output = alt_input.replace(key, "/".join(key.split("/")[:-1]) + "/output")
+                    print(f"Debug: Trying input URI: {alt_input}, output URI: {alt_output}", file=sys.stderr)
+                    
+                    try:
+                        task = Data.create_offline_batch_inference_task(
+                            name=job_name,
+                            description=description,
+                            model_id=model_id,
+                            inference_params={
+                                "temperature": temperature,
+                                "top_p": top_p,
+                                "max_output_tokens": max_output_tokens
+                            },
+                            input_bos_uri=alt_input,
+                            output_bos_uri=alt_output
+                        )
+                        
+                        task_id = task['result']['taskId']
+                        print(f"Success with alternative format: {alt_input}", file=sys.stderr)
+                        return True, task_id
+                    except Exception as alt_e:
+                        print(f"Alternative format failed: {str(alt_e)}", file=sys.stderr)
+                        continue
+            
             return False, ""
             
     def check_task_status(self, task_id: str) -> Dict[str, Any]:
