@@ -51,6 +51,10 @@ def parse_args():
     list_parser = subparsers.add_parser("list", help="List batch inference tasks")
     list_parser.add_argument("--limit", type=int, default=20, help="Maximum number of tasks to return")
     list_parser.add_argument("--offset", type=int, default=0, help="Offset for pagination")
+    list_parser.add_argument("--status", nargs="*", choices=["Done", "Running", "Failed", "Cancelled"], 
+                           help="Filter by task status (can specify multiple)")
+    list_parser.add_argument("--all-status", action="store_true", 
+                           help="Show tasks with all statuses (default: Done, Running, Failed, Cancelled)")
     
     # Validate command
     validate_parser = subparsers.add_parser("validate", help="Validate a JSONL file")
@@ -223,9 +227,19 @@ def handle_list(args, config: Config):
     # Create job submitter
     job_submitter = JobSubmitter(config)
     
+    # Determine status filter
+    run_status = None
+    if args.status:
+        run_status = args.status
+    elif not args.all_status:
+        # Default to common statuses if not specified
+        run_status = ["Done", "Running", "Failed", "Cancelled"]
+    
     # Get task list
-    print(f"Fetching batch inference tasks (limit: {args.limit}, offset: {args.offset})...")
-    tasks = job_submitter.list_tasks(limit=args.limit, offset=args.offset)
+    status_info = f" (status: {', '.join(run_status)})" if run_status else " (all statuses)"
+    print(f"Fetching batch inference tasks (limit: {args.limit}, offset: {args.offset}){status_info}...")
+    
+    tasks = job_submitter.list_tasks(limit=args.limit, offset=args.offset, run_status=run_status)
     
     if not tasks:
         print("No tasks found or failed to fetch tasks")
@@ -233,20 +247,20 @@ def handle_list(args, config: Config):
         
     # Print task list in a table format
     print(f"\nFound {len(tasks)} tasks:")
-    print("-" * 100)
-    print(f"{'Task ID':<20} {'Name':<25} {'Status':<12} {'Progress':<10} {'Create Time':<20}")
-    print("-" * 100)
+    print("-" * 120)
+    print(f"{'Task ID':<20} {'Name':<30} {'Status':<12} {'Model ID':<20} {'Create Time':<20}")
+    print("-" * 120)
     
     for task in tasks:
         task_id = task.get('taskId', 'Unknown')[:18] + '...' if len(task.get('taskId', '')) > 20 else task.get('taskId', 'Unknown')
-        name = task.get('name', 'Unknown')[:23] + '...' if len(task.get('name', '')) > 25 else task.get('name', 'Unknown')
+        name = task.get('name', 'Unknown')[:28] + '...' if len(task.get('name', '')) > 30 else task.get('name', 'Unknown')
         status = task.get('status', 'Unknown')
-        progress = f"{task.get('progress', 0)}%"
+        model_id = task.get('modelId', 'Unknown')[:18] + '...' if len(task.get('modelId', '')) > 20 else task.get('modelId', 'Unknown')
         create_time = task.get('createTime', 'Unknown')[:18] if task.get('createTime') else 'Unknown'
         
-        print(f"{task_id:<20} {name:<25} {status:<12} {progress:<10} {create_time:<20}")
+        print(f"{task_id:<20} {name:<30} {status:<12} {model_id:<20} {create_time:<20}")
     
-    print("-" * 100)
+    print("-" * 120)
     print(f"Use 'batch-submit status <task_id>' to get detailed information about a specific task")
     
     return 0

@@ -24,6 +24,7 @@ Requires-Python: >=3.6
 Description-Content-Type: text/markdown
 Requires-Dist: qianfan>=0.2.0
 Requires-Dist: boto3>=1.26.0
+Requires-Dist: requests>=2.25.0
 Requires-Dist: argparse>=1.4.0
 Dynamic: author
 Dynamic: author-email

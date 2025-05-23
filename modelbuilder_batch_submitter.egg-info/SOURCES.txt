@@ -5,6 +5,7 @@ requirements.txt
 setup.py
 batch_job_submitter/__init__.py
 batch_job_submitter/__main__.py
+batch_job_submitter/bce_auth.py
 batch_job_submitter/bos_uploader.py
 batch_job_submitter/cli.py
 batch_job_submitter/config.py

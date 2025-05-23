@@ -10,6 +10,7 @@ import sys
 import json
 import time
 import uuid
+import requests
 from typing import Dict, Any, List, Optional, Tuple
 
 # Try to import qianfan
@@ -22,6 +23,7 @@ except ImportError:
 
 from batch_job_submitter.config import Config
 from batch_job_submitter.bos_uploader import BosUploader
+from batch_job_submitter.bce_auth import BceApiSignatureTool
 
 
 class JobSubmitter:
@@ -45,6 +47,13 @@ class JobSubmitter:
             secret_access_key=self.config.qianfan_secret_key,
             endpoint=self.config.get("bos", "endpoint", "bj.bcebos.com"),
             bucket=self.config.get("bos", "bucket", "copilot-engine-batch-infer")
+        )
+        
+        # Create BCE API tool for direct API calls
+        self.api_tool = BceApiSignatureTool(
+            ak=self.config.qianfan_access_key,
+            sk=self.config.qianfan_secret_key,
+            host=self.config.get("qianfan", "host", "qianfan.baidubce.com")
         )
         
         # Check qianfan availability
@@ -213,36 +222,100 @@ class JobSubmitter:
             print(f"Failed to check task status: {str(e)}", file=sys.stderr)
             return {}
             
-    def list_tasks(self, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+    def list_tasks(self, limit: int = 20, offset: int = 0, run_status: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
-        List batch inference tasks
+        List batch inference tasks using direct BCE API calls with pagination
         
         Args:
             limit: Maximum number of tasks to return (default: 20)
             offset: Offset for pagination (default: 0)
+            run_status: List of task statuses to filter (e.g., ["Done", "Running"])
             
         Returns:
             List of task information
         """
-        if not HAS_QIANFAN:
-            raise ImportError("qianfan package not found. Please install it with 'pip install qianfan'")
-            
         try:
-            # Try different possible method names for listing tasks
-            # The exact method name may vary in different SDK versions
-            try:
-                # Try the most likely method name
-                result = Data.list_batch_inference_tasks(limit=limit, offset=offset)
-            except AttributeError:
-                try:
-                    # Alternative method name
-                    result = Data.list_offline_batch_inference_tasks(limit=limit, offset=offset)
-                except AttributeError:
-                    # Another possible method name
-                    result = Data.get_batch_inference_tasks(limit=limit, offset=offset)
+            all_tasks = []
+            marker = ""
+            tasks_collected = 0
             
-            return result.get('result', {}).get('tasks', [])
+            # Default to all statuses if not specified
+            if run_status is None:
+                run_status = ["Done", "Running", "Failed", "Cancelled"]
+            
+            while tasks_collected < limit:
+                payload = {
+                    "runStatus": run_status,
+                    "pageReverse": True  # Get most recent tasks first
+                }
+                
+                # Add marker for pagination (except for first request)
+                if marker:
+                    payload["marker"] = marker
+                
+                try:
+                    # Make API call using BCE authentication
+                    response = self.api_tool.post(
+                        uri="/v2/batchinference",
+                        query="Action=DescribeBatchInferenceTasks",
+                        body=payload,
+                        timeout=30
+                    )
+                    
+                    response.raise_for_status()
+                    response_data = response.json()
+                    
+                    result = response_data.get("result", {})
+                    task_list = result.get("taskList", [])
+                    page_info = result.get("pageInfo", {})
+                    is_truncated = page_info.get("isTruncated", False)
+                    
+                    # Process tasks
+                    for task in task_list:
+                        if tasks_collected >= limit:
+                            break
+                            
+                        # Extract relevant task information
+                        task_info = {
+                            'taskId': task.get('taskId'),
+                            'name': task.get('name'),
+                            'status': task.get('runStatus'),
+                            'progress': task.get('progress', 0),
+                            'createTime': task.get('createTime'),
+                            'startTime': task.get('startTime'),
+                            'endTime': task.get('endTime'),
+                            'inputBosUri': task.get('inputBosUri'),
+                            'outputBosUri': task.get('outputBosUri'),
+                            'outputDir': task.get('outputDir'),
+                            'modelId': task.get('modelId')
+                        }
+                        
+                        all_tasks.append(task_info)
+                        tasks_collected += 1
+                        
+                        # Update marker for next page
+                        marker = task.get('taskId')
+                    
+                    # Break if no more pages or no tasks returned
+                    if not is_truncated or not task_list:
+                        break
+                        
+                    # Small delay between requests
+                    time.sleep(0.1)
+                    
+                except requests.exceptions.RequestException as e:
+                    print(f"API request failed: {str(e)}", file=sys.stderr)
+                    break
+                except json.JSONDecodeError as e:
+                    print(f"Failed to parse API response: {str(e)}", file=sys.stderr)
+                    break
+            
+            # Apply offset if specified
+            if offset > 0:
+                all_tasks = all_tasks[offset:]
+            
+            return all_tasks[:limit]
+            
         except Exception as e:
             print(f"Failed to list tasks: {str(e)}", file=sys.stderr)
-            # Fallback: return empty list if API method doesn't exist
             return [] 
