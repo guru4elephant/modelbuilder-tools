@@ -47,6 +47,11 @@ def parse_args():
     status_parser = subparsers.add_parser("status", help="Check job status")
     status_parser.add_argument("task_id", help="Task ID to check")
     
+    # List command
+    list_parser = subparsers.add_parser("list", help="List batch inference tasks")
+    list_parser.add_argument("--limit", type=int, default=20, help="Maximum number of tasks to return")
+    list_parser.add_argument("--offset", type=int, default=0, help="Offset for pagination")
+    
     # Validate command
     validate_parser = subparsers.add_parser("validate", help="Validate a JSONL file")
     validate_parser.add_argument("file", help="JSONL file to validate")
@@ -213,6 +218,40 @@ def handle_status(args, config: Config):
     return 0
 
 
+def handle_list(args, config: Config):
+    """Handle list command"""
+    # Create job submitter
+    job_submitter = JobSubmitter(config)
+    
+    # Get task list
+    print(f"Fetching batch inference tasks (limit: {args.limit}, offset: {args.offset})...")
+    tasks = job_submitter.list_tasks(limit=args.limit, offset=args.offset)
+    
+    if not tasks:
+        print("No tasks found or failed to fetch tasks")
+        return 0
+        
+    # Print task list in a table format
+    print(f"\nFound {len(tasks)} tasks:")
+    print("-" * 100)
+    print(f"{'Task ID':<20} {'Name':<25} {'Status':<12} {'Progress':<10} {'Create Time':<20}")
+    print("-" * 100)
+    
+    for task in tasks:
+        task_id = task.get('taskId', 'Unknown')[:18] + '...' if len(task.get('taskId', '')) > 20 else task.get('taskId', 'Unknown')
+        name = task.get('name', 'Unknown')[:23] + '...' if len(task.get('name', '')) > 25 else task.get('name', 'Unknown')
+        status = task.get('status', 'Unknown')
+        progress = f"{task.get('progress', 0)}%"
+        create_time = task.get('createTime', 'Unknown')[:18] if task.get('createTime') else 'Unknown'
+        
+        print(f"{task_id:<20} {name:<25} {status:<12} {progress:<10} {create_time:<20}")
+    
+    print("-" * 100)
+    print(f"Use 'batch-submit status <task_id>' to get detailed information about a specific task")
+    
+    return 0
+
+
 def handle_validate(args, config: Config):
     """Handle validate command"""
     # Check file exists
@@ -286,6 +325,8 @@ def main():
         return handle_submit(args, config)
     elif args.command == "status":
         return handle_status(args, config)
+    elif args.command == "list":
+        return handle_list(args, config)
     elif args.command == "validate":
         return handle_validate(args, config)
     else:

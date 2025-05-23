@@ -211,4 +211,38 @@ class JobSubmitter:
             return task.get('result', {})
         except Exception as e:
             print(f"Failed to check task status: {str(e)}", file=sys.stderr)
-            return {} 
+            return {}
+            
+    def list_tasks(self, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        List batch inference tasks
+        
+        Args:
+            limit: Maximum number of tasks to return (default: 20)
+            offset: Offset for pagination (default: 0)
+            
+        Returns:
+            List of task information
+        """
+        if not HAS_QIANFAN:
+            raise ImportError("qianfan package not found. Please install it with 'pip install qianfan'")
+            
+        try:
+            # Try different possible method names for listing tasks
+            # The exact method name may vary in different SDK versions
+            try:
+                # Try the most likely method name
+                result = Data.list_batch_inference_tasks(limit=limit, offset=offset)
+            except AttributeError:
+                try:
+                    # Alternative method name
+                    result = Data.list_offline_batch_inference_tasks(limit=limit, offset=offset)
+                except AttributeError:
+                    # Another possible method name
+                    result = Data.get_batch_inference_tasks(limit=limit, offset=offset)
+            
+            return result.get('result', {}).get('tasks', [])
+        except Exception as e:
+            print(f"Failed to list tasks: {str(e)}", file=sys.stderr)
+            # Fallback: return empty list if API method doesn't exist
+            return [] 
